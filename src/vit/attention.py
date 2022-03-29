@@ -18,7 +18,14 @@ class Attention(pl.LightningModule):
         )
 
     def forward(self, x):
-        qkv = rearrange(self.to_qkv(x), 'b n (h d) -> b h n d', h=self.n_heads)
+        print(self)
+        print("here", x.shape)
+        x = rearrange(x, 'b n h w -> b h w n')
+        qkv = self.to_qkv(x)
+        # print("here", x.shape)
+        # # qkv = rearrange(x, 'b n (h d) -> b h n d', h=self.n_heads)
+        # qkv = rearrange(self.to_qkv(x), 'b n h w -> b h w n')
+        # # qkv = rearrange(self.to_qkv(x), 'b n (h d) -> b h n d', h=self.n_heads)
         attn = self.attention(qkv)
         out = self.to_out(attn)
         return out
@@ -26,5 +33,6 @@ class Attention(pl.LightningModule):
     def attention(self, qkv):
         q, k, v = qkv.chunk(3, dim=-1)
         scores = einsum('bhqd, bhkd -> bhqk', q, k) * self.scaling
-        attn = einsum('bhad, bhdv -> bhav', self.softmax(scores), v)
+        attn = einsum('bhad, bhdv -> bhav', self.attend(scores), v)
+        return rearrange(attn, 'b h w n -> b n h w')
         return rearrange(attn, 'b h n d -> b n (h d)')

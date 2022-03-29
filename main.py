@@ -6,7 +6,7 @@ from src import MobileViT
 from torch import nn
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
-from torchvision.datasets import MNIST
+from torchvision.datasets import CIFAR10
 
 model = MobileViT(
     image_size=(28, 28),
@@ -19,12 +19,12 @@ model = MobileViT(
     # patch_size=(2, 2),
 )
 
-dataset = MNIST('../data', train=True, download=True,
-                transform=transforms.ToTensor())
-test_data = MNIST('../data', train=False, download=True,
+dataset = CIFAR10('../data', train=True, download=True,
                   transform=transforms.ToTensor())
+test_data = CIFAR10('../data', train=False, download=True,
+                    transform=transforms.ToTensor())
 train_data, valid_data = random_split(
-    dataset, [55000, 5000], generator=torch.Generator().manual_seed(42))
+    dataset, [45000, 5000], generator=torch.Generator().manual_seed(42))
 
 
 batch_size = 32

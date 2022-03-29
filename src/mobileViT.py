@@ -11,7 +11,7 @@ class MobileViT(pl.LightningModule):
     def __init__(self, image_size, dims, depths, channels, num_classes,
                  expansion=4, kernel_size=3, patch_size=(2, 2)):
         super().__init__()
-        self.conv1 = conv_nxn_bn(1, 16, 3, stride=2)
+        self.conv1 = conv_nxn_bn(3, 16, 3, stride=2)
 
         self.mv2 = nn.ModuleList([])
         self.mv2.append(MV2Block(16, 16, stride=1))
@@ -35,20 +35,33 @@ class MobileViT(pl.LightningModule):
         self.save_hyperparameters()
 
     def forward(self, x):
+        i = [0]
+        self.debug(x, i)
+
         x = self.conv1(x)
+        self.debug(x, i)
 
         for mv2_block in self.mv2:
             x = mv2_block(x)
+            self.debug(x, i)
 
         for mv2mvit_block in self.mv2mvit:
             x = mv2mvit_block(x)
+            self.debug(x, i)
 
         x = self.conv2(x)
+        self.debug(x, i)
 
         x = self.pool(x).view(-1, x.shape[1])
+        self.debug(x, i)
         x = self.fc(x)
+        self.debug(x, i)
 
         return x
+
+    def debug(self, x, i):
+        i[0] += 1
+        print(i[0], x.shape)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
@@ -80,7 +93,6 @@ class MV2MViTBlock(pl.LightningModule):
 class MV2Block(pl.LightningModule):
     def __init__(self, c_in, c_out, *, stride=1, expansion=4):
         super().__init__()
-
         assert stride in (1, 2)
         self.stride = stride
 
@@ -94,9 +106,9 @@ class MV2Block(pl.LightningModule):
 
     def forward(self, x):
         if self.stride == 1:
-            return self.conv(x)
-        else:
             return x + self.conv(x)
+        else:
+            return self.conv(x)
 
 
 class MobileViTBlock(pl.LightningModule):
