@@ -1,12 +1,14 @@
 import pytorch_lightning as pl
 import torch
-import torch.nn.functional as F
-from einops import rearrange
 from src import MobileViT
-from torch import nn
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 model = MobileViT(
     image_size=(28, 28),
@@ -18,6 +20,9 @@ model = MobileViT(
     # kernel_size=3,
     # patch_size=(2, 2),
 )
+
+print(count_parameters(model))
+print(model)
 
 dataset = CIFAR10('../data', train=True, download=True,
                   transform=transforms.ToTensor())
