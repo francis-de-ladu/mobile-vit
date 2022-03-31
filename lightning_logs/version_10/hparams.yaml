@@ -6,8 +6,8 @@ depths:
 dims: []
 expansion: 4
 image_size: !!python/tuple
-- 28
-- 28
+- 32
+- 32
 kernel_size: 3
 num_classes: 10
 patch_size: !!python/tuple

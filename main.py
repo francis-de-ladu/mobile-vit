@@ -1,9 +1,6 @@
 import pytorch_lightning as pl
-import torch
+from pl_bolts.datamodules import CIFAR10DataModule
 from src import MobileViT
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
-from torchvision.datasets import CIFAR10
 
 
 def count_parameters(model):
@@ -11,7 +8,7 @@ def count_parameters(model):
 
 
 model = MobileViT(
-    image_size=(28, 28),
+    image_size=(32, 32),
     dims=[],
     depths=[2, 4, 3],
     channels=[],
@@ -21,22 +18,24 @@ model = MobileViT(
     # patch_size=(2, 2),
 )
 
-print(count_parameters(model))
-print(model)
-
-dataset = CIFAR10('../data', train=True, download=True,
-                  transform=transforms.ToTensor())
-test_data = CIFAR10('../data', train=False, download=True,
-                    transform=transforms.ToTensor())
-train_data, valid_data = random_split(
-    dataset, [45000, 5000], generator=torch.Generator().manual_seed(42))
+cifar10 = CIFAR10DataModule(
+    data_dir='../data',
+    batch_size=2048,
+    num_workers=12,
+)
 
 
-batch_size = 32
-train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=4)
-valid_loader = DataLoader(valid_data, batch_size=batch_size, num_workers=4)
-test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=4)
+print('n_params:', count_parameters(model))
+# print(model)
 
-trainer = pl.Trainer(gpus=-1, auto_scale_batch_size=True)
+trainer = pl.Trainer(
+    gpus=-1,
+    # auto_scale_batch_size=True,
+    # auto_lr_find=True,
+    max_steps=1000,
+    weights_summary='top',
+)
 
-trainer.fit(model, train_loader, valid_loader)
+trainer.tune(model, cifar10)
+
+trainer.fit(model, datamodule=cifar10)

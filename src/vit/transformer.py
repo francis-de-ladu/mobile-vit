@@ -27,12 +27,8 @@ class PreNorm(pl.LightningModule):
         self.fn = fn
 
     def forward(self, x, **kwargs):
-        print(x.shape)
         x = self.norm(x)
-        print(x.shape)
         x = self.fn(x, **kwargs)
-        print(x.shape)
-        return x
         return self.fn(self.norm(x), **kwargs)
 
 
@@ -51,23 +47,20 @@ class Attention(pl.LightningModule):
         )
 
     def forward(self, x):
-        print(self)
-        print("here", x.shape)
-        x = rearrange(x, 'b n h w -> b h w n')
+        # print("x", x.shape)
         qkv = self.to_qkv(x)
-        # print("here", x.shape)
-        # # qkv = rearrange(x, 'b n (h d) -> b h n d', h=self.n_heads)
-        # qkv = rearrange(self.to_qkv(x), 'b n h w -> b h w n')
-        # # qkv = rearrange(self.to_qkv(x), 'b n (h d) -> b h n d', h=self.n_heads)
+        # print("qkv", qkv.shape)
         attn = self.attention(qkv)
+        # print("attn", attn.shape)
         out = self.to_out(attn)
+        # print("out", out.shape)
         return out
 
     def attention(self, qkv):
         q, k, v = qkv.chunk(3, dim=-1)
         scores = einsum('bhqd, bhkd -> bhqk', q, k) * self.scaling
         attn = einsum('bhad, bhdv -> bhav', self.softmax(scores), v)
-        return rearrange(attn, 'b h w n -> b n h w')
+        return attn
         return rearrange(attn, 'b h n d -> b n (h d)')
 
 

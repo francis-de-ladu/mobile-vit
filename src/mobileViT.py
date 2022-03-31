@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
+from einops import rearrange
 from torch import nn
 
 from .helpers import conv_1x1_bn, conv_nxn_bn
@@ -24,15 +25,16 @@ class MobileViT(pl.LightningModule):
                                          patch_size=patch_size, expansion=expansion))
         self.mv2mvit.append(MV2MViTBlock(48, 64, kernel_size, dim=80, depth=4,
                                          patch_size=patch_size, expansion=expansion))
-        self.mv2mvit.append(MV2MViTBlock(64, 80, kernel_size, dim=96, depth=3,
-                                         patch_size=patch_size, expansion=expansion))
+        # self.mv2mvit.append(MV2MViTBlock(64, 80, kernel_size, dim=96, depth=3,
+        #                                  patch_size=patch_size, expansion=expansion))
 
-        self.conv2 = conv_1x1_bn(80, 320)
+        self.conv2 = conv_1x1_bn(64, 320)
 
-        self.pool = nn.AvgPool2d(image_size[0] // 32, stride=1)
+        self.pool = nn.AvgPool2d(image_size[0] // 16, stride=1)
         self.fc = nn.Linear(320, num_classes, bias=False)
 
         self.save_hyperparameters()
+        self.hparams.lr = 2e-3
 
     def forward(self, x):
         i = [0]
@@ -60,34 +62,39 @@ class MobileViT(pl.LightningModule):
         return x
 
     def debug(self, x, i):
+        return
         i[0] += 1
         print(i[0], x.shape)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
+        # print(x.shape, y.shape)
         # x = x.view(x.shape[0], -1)
         logits = self(x)
+        # print(logits.shape)
         loss = F.cross_entropy(logits, y, label_smoothing=0.1)
         self.log('train_loss', loss)
         return loss
 
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        logits = self(x)
+        loss = F.cross_entropy(logits, y, label_smoothing=0.1)
+        self.log('valid_loss', loss)
+        return loss
+
     def configure_optimizers(self):
-        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
-        optimizer = torch.optim.AdamW(self.parameters(), lr=2e-3)
+        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
         return optimizer
 
+    @property
+    def lr(self):
+        return self.hparams.lr
 
-class MV2MViTBlock(pl.LightningModule):
-    def __init__(self, c_in, c_out, kernel_size, dim, depth, patch_size, expansion):
-        super().__init__()
-        self.mv2 = MV2Block(c_in, c_out, stride=2)
-        self.mvit = MobileViTBlock(
-            dim, depth, c_out, kernel_size, patch_size, expansion)
-
-    def forward(self, x):
-        x = self.mv2(x)
-        x = self.mvit(x)
-        return x
+    @lr.setter
+    def lr(self, lr):
+        self.hparams.lr = lr
 
 
 class MV2Block(pl.LightningModule):
@@ -111,7 +118,7 @@ class MV2Block(pl.LightningModule):
             return self.conv(x)
 
 
-class MobileViTBlock(pl.LightningModule):
+class MViTBlock(pl.LightningModule):
     def __init__(self, dim, depth, channels, kernel_size, patch_size, expansion,
                  dropout=0.):
         super().__init__()
@@ -129,16 +136,34 @@ class MobileViTBlock(pl.LightningModule):
         # clone input tensor for concatenation in the fusion step
         x_hat = x.clone()
 
-        # Local representation
+        # Local representations
         x = self.conv1(x)
         x = self.conv2(x)
 
-        # Global representation
+        # Global representations
+        _, _, h, w = x.shape
+        x = rearrange(x, 'b d (h ph) (w pw) -> b (ph pw) (h w) d',
+                      ph=self.ph, pw=self.pw)
         x = self.transformer(x)
+        x = rearrange(x, 'b (ph pw) (h w) d -> b d (h ph) (w pw)',
+                      ph=self.ph, pw=self.pw, h=h // self.ph, w=w // self.pw)
 
         # Fusion
         x = self.conv3(x)
         x = torch.cat((x, x_hat), axis=1)
         x = self.conv4(x)
 
+        return x
+
+
+class MV2MViTBlock(pl.LightningModule):
+    def __init__(self, c_in, c_out, kernel_size, dim, depth, patch_size, expansion):
+        super().__init__()
+        self.mv2 = MV2Block(c_in, c_out, stride=2)
+        self.mvit = MViTBlock(
+            dim, depth, c_out, kernel_size, patch_size, expansion)
+
+    def forward(self, x):
+        x = self.mv2(x)
+        x = self.mvit(x)
         return x
