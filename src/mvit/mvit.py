@@ -68,8 +68,8 @@ class MobileViT(pl.LightningModule):
         logits = self.forward(x)
         loss = F.cross_entropy(logits, y, label_smoothing=0.1)
         acc = accuracy(logits.argmax(dim=1), y)
-        self.log('train_loss', loss, on_step=True)
-        self.log('train_acc', acc, on_step=True, prog_bar=True)
+        self.log('Loss/Train', loss, on_step=True)
+        self.log('Accuracy/Train', acc, on_step=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -77,8 +77,8 @@ class MobileViT(pl.LightningModule):
         logits = self.forward(x)
         loss = F.cross_entropy(logits, y, label_smoothing=0.1)
         acc = accuracy(logits.argmax(dim=1), y)
-        self.log('val_loss', loss, on_epoch=True, reduce_fx=torch.mean)
-        self.log('val_acc', acc, on_epoch=True, reduce_fx=torch.mean)
+        self.log('Loss/Valid', loss, on_epoch=True, reduce_fx=torch.mean)
+        self.log('Accuracy/Valid', acc, on_epoch=True, reduce_fx=torch.mean)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
