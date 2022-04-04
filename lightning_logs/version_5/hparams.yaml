@@ -1,9 +1,20 @@
-channels: []
+chs:
+- 16
+- 32
+- 48
+- 48
+- 64
+- 80
+- 96
+- 384
 depths:
 - 2
 - 4
 - 3
-dims: []
+dims:
+- 96
+- 120
+- 144
 expansion: 4
 image_size: !!python/tuple
 - 32

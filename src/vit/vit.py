@@ -1,9 +1,8 @@
-import pytorch_lightning as pl
 from einops import rearrange
 from torch import einsum, nn
 
 
-class Transformer(pl.LightningModule):
+class Transformer(nn.Module):
     def __init__(self, dim, depth, heads, expansion, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])
@@ -20,7 +19,7 @@ class Transformer(pl.LightningModule):
         return x
 
 
-class PreNorm(pl.LightningModule):
+class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
@@ -32,7 +31,7 @@ class PreNorm(pl.LightningModule):
         return self.fn(self.norm(x), **kwargs)
 
 
-class Attention(pl.LightningModule):
+class Attention(nn.Module):
     def __init__(self, d_model, n_heads, dropout=0.):
         super().__init__()
         self.n_heads = n_heads
@@ -47,13 +46,9 @@ class Attention(pl.LightningModule):
         )
 
     def forward(self, x):
-        # print("x", x.shape)
         qkv = self.to_qkv(x)
-        # print("qkv", qkv.shape)
         attn = self.attention(qkv)
-        # print("attn", attn.shape)
         out = self.to_out(attn)
-        # print("out", out.shape)
         return out
 
     def attention(self, qkv):

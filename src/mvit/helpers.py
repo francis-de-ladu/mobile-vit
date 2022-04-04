@@ -1,11 +1,11 @@
 from torch import nn
 
 
-def conv_1x1_bn(c_in, c_out):
+def conv_1x1_bn(c_in, c_out, activation=True):
     return nn.Sequential(
         nn.Conv2d(c_in, c_out, 1, stride=1, padding=0, bias=False),
         nn.BatchNorm2d(c_out),
-        nn.SiLU(),
+        nn.SiLU() if activation else nn.Identity(),
     )
 
 
