@@ -92,20 +92,6 @@ class MobileViT(pl.LightningModule):
         self.hparams.lr = lr
 
 
-# class MV2MViTBlock(nn.Module):
-#     def __init__(self, dim, depth, c_in, c_out, kernel_size, patch_size,
-#                  expansion):
-#         super().__init__()
-#         self.mv2 = MV2Block(c_in, c_out, stride=2, expansion=expansion[0])
-#         self.mvit = MViTBlock(
-#             dim, depth, c_out, kernel_size, patch_size, expansion[1])
-#
-#     def forward(self, x):
-#         x = self.mv2(x)
-#         x = self.mvit(x)
-#         return x
-
-
 class MV2Block(nn.Module):
     def __init__(self, c_in, c_out, stride=1, expansion=4):
         super().__init__()
