@@ -8,14 +8,14 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-model = mobilevit(image_size=(32, 32), num_classes=10, kind='s')
-
 cifar10 = CIFAR10DataModule(
     data_dir='../data',
     batch_size=2048,
     num_workers=12,
 )
 
+# model = mobilevit(image_size=(32, 32), num_classes=10, kind='xxs')
+model = mobilevit(image_size=(256, 256), num_classes=1000, kind='s')
 
 logger = TensorBoardLogger('tb_logs')
 

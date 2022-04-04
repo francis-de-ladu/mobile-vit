@@ -16,48 +16,50 @@ class MobileViT(pl.LightningModule):
         self.conv1 = conv_nxn_bn(3, chs[0], kernel_size, stride=2)
 
         self.mv2 = nn.ModuleList([])
-        self.mv2.append(
-            MV2Block(chs[0], chs[1], stride=1, expansion=expansion))
-        self.mv2.append(
-            MV2Block(chs[1], chs[2], stride=2, expansion=expansion))
-        self.mv2.append(
-            MV2Block(chs[2], chs[3], stride=1, expansion=expansion))
-        self.mv2.append(
-            MV2Block(chs[3], chs[3], stride=1, expansion=expansion))  # Repeat
+        self.mv2.append(MV2Block(chs[0], chs[1], 1, expansion))
+        self.mv2.append(MV2Block(chs[1], chs[2], 2, expansion))
+        self.mv2.append(MV2Block(chs[2], chs[3], 1, expansion))
+        self.mv2.append(MV2Block(chs[3], chs[3], 1, expansion))  # Repeat
+        self.mv2.append(MV2Block(chs[3], chs[4], 2, expansion))
+        self.mv2.append(MV2Block(chs[4], chs[5], 2, expansion))
+        self.mv2.append(MV2Block(chs[5], chs[6], 2, expansion))
 
-        self.mv2mvit = nn.ModuleList([])
-        self.mv2mvit.append(MV2MViTBlock(
-            dims[0], depths[0], chs[3], chs[4], kernel_size,
-            patch_size=patch_size, expansion=expansion))
-        self.mv2mvit.append(MV2MViTBlock(
-            dims[1], depths[1], chs[4], chs[5], kernel_size,
-            patch_size=patch_size, expansion=expansion))
-        self.mv2mvit.append(MV2MViTBlock(
-            dims[2], depths[2], chs[5], chs[6], kernel_size,
-            patch_size=patch_size, expansion=expansion))
+        self.mvit = nn.ModuleList([])
+        self.mvit.append(MViTBlock(
+            dims[0], depths[0], chs[4], kernel_size, patch_size, expansion=2))
+        self.mvit.append(MViTBlock(
+            dims[1], depths[1], chs[5], kernel_size, patch_size, expansion=4))
+        self.mvit.append(MViTBlock(
+            dims[2], depths[2], chs[6], kernel_size, patch_size, expansion=4))
 
-        self.conv2 = conv_1x1_bn(chs[6], chs[7])
+        self.conv2 = conv_1x1_bn(chs[-2], chs[-1])
 
         self.pool = nn.AvgPool2d(image_size[0] // 32, stride=1)
-        self.fc = nn.Linear(chs[7], num_classes, bias=False)
+        self.fc = nn.Linear(chs[-1], num_classes, bias=False)
 
         self.save_hyperparameters()
         self.hparams.lr = 2e-3
 
     def forward(self, x):
         x = self.conv1(x)
+        x = self.mv2[0](x)
 
-        for mv2_block in self.mv2:
-            x = mv2_block(x)
+        x = self.mv2[1](x)
+        x = self.mv2[2](x)
+        x = self.mv2[3](x)  # Repeat
 
-        for mv2mvit_block in self.mv2mvit:
-            x = mv2mvit_block(x)
+        x = self.mv2[-3](x)
+        x = self.mvit[0](x)
 
+        x = self.mv2[-2](x)
+        x = self.mvit[1](x)
+
+        x = self.mv2[-1](x)
+        x = self.mvit[2](x)
         x = self.conv2(x)
 
         x = self.pool(x).view(-1, x.shape[1])
         x = self.fc(x)
-
         return x
 
     def training_step(self, batch, batch_idx):
@@ -90,8 +92,22 @@ class MobileViT(pl.LightningModule):
         self.hparams.lr = lr
 
 
+# class MV2MViTBlock(nn.Module):
+#     def __init__(self, dim, depth, c_in, c_out, kernel_size, patch_size,
+#                  expansion):
+#         super().__init__()
+#         self.mv2 = MV2Block(c_in, c_out, stride=2, expansion=expansion[0])
+#         self.mvit = MViTBlock(
+#             dim, depth, c_out, kernel_size, patch_size, expansion[1])
+#
+#     def forward(self, x):
+#         x = self.mv2(x)
+#         x = self.mvit(x)
+#         return x
+
+
 class MV2Block(nn.Module):
-    def __init__(self, c_in, c_out, *, stride=1, expansion=4):
+    def __init__(self, c_in, c_out, stride=1, expansion=4):
         super().__init__()
         assert stride in (1, 2)
         self.stride = stride
@@ -114,20 +130,20 @@ class MV2Block(nn.Module):
 
 class MViTBlock(nn.Module):
     def __init__(self, dim, depth, channels, kernel_size, patch_size,
-                 expansion=4, dropout=0.1):
+                 expansion=4, dropout=0.):
         super().__init__()
         self.ph, self.pw = patch_size
 
         self.conv1 = conv_nxn_bn(channels, channels, kernel_size)
         self.conv2 = conv_1x1_bn(channels, dim)
 
-        self.transformer = Transformer(dim, depth, 4, expansion, dropout)
+        self.transformer = Transformer(dim, depth, 4, 8, expansion, dropout)
 
         self.conv3 = conv_1x1_bn(dim, channels)
         self.conv4 = conv_nxn_bn(2 * channels, channels, kernel_size)
 
     def forward(self, x):
-        # clone input tensor for concatenation in the fusion step
+        # clone input tensor for concatenation in fusion step
         x_hat = x.clone()
 
         # Local representations
@@ -141,25 +157,11 @@ class MViTBlock(nn.Module):
                       ph=ph, pw=pw)
         x = self.transformer(x)
         x = rearrange(x, 'b (ph pw) (h w) d -> b d (h ph) (w pw)',
-                      ph=ph, pw=pw, h=h // ph, w=w // pw)
+                      ph=ph, pw=pw, h=(h // ph), w=(w // pw))
 
         # Fusion
         x = self.conv3(x)
         x = torch.cat((x, x_hat), axis=1)
         x = self.conv4(x)
 
-        return x
-
-
-class MV2MViTBlock(nn.Module):
-    def __init__(self, dim, depth, c_in, c_out, kernel_size, patch_size,
-                 expansion=4):
-        super().__init__()
-        self.mv2 = MV2Block(c_in, c_out, stride=2)
-        self.mvit = MViTBlock(
-            dim, depth, c_out, kernel_size, patch_size, expansion)
-
-    def forward(self, x):
-        x = self.mv2(x)
-        x = self.mvit(x)
         return x

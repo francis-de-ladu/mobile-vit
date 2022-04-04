@@ -1,14 +1,13 @@
-from einops import rearrange
 from torch import einsum, nn
 
 
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, expansion, dropout=0.):
+    def __init__(self, dim, depth, heads, d_head, expansion, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                PreNorm(dim, Attention(dim, heads, dropout)),
+                PreNorm(dim, Attention(dim, heads, d_head, dropout)),
                 PreNorm(dim, FeedForward(dim, expansion, dropout)),
             ]))
 
@@ -32,16 +31,16 @@ class PreNorm(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, d_model, n_heads, dropout=0.):
+    def __init__(self, d_model, n_heads, d_head, dropout=0.):
         super().__init__()
-        self.n_heads = n_heads
-        self.scaling = (d_model // n_heads)**(-0.5)
+        inner_dim = d_head * n_heads
+        self.scaling = inner_dim**(-0.5)
 
-        self.to_qkv = nn.Linear(d_model, d_model * 3)
+        self.to_qkv = nn.Linear(d_model, inner_dim * 3, bias=False)
         self.softmax = nn.Softmax(dim=-1)
 
         self.to_out = nn.Sequential(
-            nn.Linear(d_model, d_model),
+            nn.Linear(inner_dim, d_model),
             nn.Dropout(dropout),
         )
 
@@ -56,7 +55,6 @@ class Attention(nn.Module):
         scores = einsum('bhqd, bhkd -> bhqk', q, k) * self.scaling
         attn = einsum('bhad, bhdv -> bhav', self.softmax(scores), v)
         return attn
-        return rearrange(attn, 'b h n d -> b n (h d)')
 
 
 class FeedForward(nn.Sequential):
