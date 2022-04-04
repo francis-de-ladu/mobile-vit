@@ -13,7 +13,7 @@ class MobileViT(pl.LightningModule):
     def __init__(self, image_size, num_classes, chs, dims, depths,
                  expansion=4, kernel_size=3, patch_size=(2, 2)):
         super().__init__()
-        self.conv1 = conv_nxn_bn(3, chs[0], kernel_size, stride=2)
+        self.conv1 = conv_nxn_bn(image_size[0], chs[0], kernel_size, stride=2)
 
         self.mv2 = nn.ModuleList([])
         self.mv2.append(MV2Block(chs[0], chs[1], 1, expansion))
@@ -34,11 +34,12 @@ class MobileViT(pl.LightningModule):
 
         self.conv2 = conv_1x1_bn(chs[-2], chs[-1])
 
-        self.pool = nn.AvgPool2d(image_size[0] // 32, stride=1)
+        _, H, W = image_size
+        self.pool = nn.AvgPool2d((H // 32, W // 32), stride=1)
         self.fc = nn.Linear(chs[-1], num_classes, bias=False)
 
         self.save_hyperparameters()
-        self.hparams.lr = 2e-3
+        self.hparams.lr = 1e-3
 
     def forward(self, x):
         x = self.conv1(x)

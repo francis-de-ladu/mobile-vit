@@ -2,20 +2,29 @@ import pytorch_lightning as pl
 from pl_bolts.datamodules import CIFAR10DataModule
 from pytorch_lightning.loggers import TensorBoardLogger
 from src.mobilevit import mobilevit
+from torchvision import transforms as T
 
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-cifar10 = CIFAR10DataModule(
+datamodule = CIFAR10DataModule(
     data_dir='../data',
     batch_size=2048,
     num_workers=12,
 )
 
-# model = mobilevit(image_size=(32, 32), num_classes=10, kind='xxs')
-model = mobilevit(image_size=(256, 256), num_classes=1000, kind='s')
+datamodule.train_transforms = T.Compose([
+    T.AutoAugment(T.AutoAugmentPolicy.CIFAR10),
+    T.ToTensor(),
+])
+
+model = mobilevit(
+    image_size=datamodule.dims,
+    num_classes=datamodule.num_classes,
+    kind='s',
+)
 
 logger = TensorBoardLogger('tb_logs')
 
@@ -33,4 +42,4 @@ trainer = pl.Trainer(
     weights_summary='top',
 )
 
-trainer.fit(model, datamodule=cifar10)
+trainer.fit(model, datamodule=datamodule)
