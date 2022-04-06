@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from einops import rearrange
+from timm.scheduler.cosine_lr import CosineLRScheduler
 from torch import nn
 from torchmetrics.functional import accuracy
 
@@ -38,8 +39,8 @@ class MobileViT(pl.LightningModule):
         self.pool = nn.AvgPool2d((H // 32, W // 32), stride=1)
         self.fc = nn.Linear(chs[-1], num_classes, bias=False)
 
+        self.hparams.lr = 2e-3
         self.save_hyperparameters()
-        self.hparams.lr = 1e-3
 
     def forward(self, x):
         x = self.conv1(x)
@@ -50,13 +51,13 @@ class MobileViT(pl.LightningModule):
         x = self.mv2[3](x)  # Repeat
 
         x = self.mv2[-3](x)
-        x = self.mvit[0](x)
+        x = self.mvit[-3](x)
 
         x = self.mv2[-2](x)
-        x = self.mvit[1](x)
+        x = self.mvit[-2](x)
 
         x = self.mv2[-1](x)
-        x = self.mvit[2](x)
+        x = self.mvit[-1](x)
         x = self.conv2(x)
 
         x = self.pool(x).view(-1, x.shape[1])
@@ -82,7 +83,19 @@ class MobileViT(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
-        return optimizer
+        scheduler = CosineLRScheduler(
+            optimizer,
+            t_initial=2500,
+            cycle_decay=0.50,
+            cycle_limit=10,
+            warmup_t=2500,
+            warmup_lr_init=2e-4,
+            warmup_prefix=True,
+        )
+        return [optimizer], [scheduler]
+
+    def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
+        scheduler.step(epoch=self.global_step)
 
     @property
     def lr(self):
